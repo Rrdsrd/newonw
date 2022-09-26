@@ -1,0 +1,51 @@
+    {
+    "Parameter_Name" : "Table_A",
+    "Parameter_Type" : "CSV",
+    "DML_Extract_S3_path" : "NA",
+    "DML_Target_Database_name" : "NA",
+    "DML_Target_Database_Type" : "NA",
+    "DML_SQL_File_Bucket" : "NA",
+    "DML_SQL_File_Path" : "NA",
+    "DML_Connection_String" : "NA",
+    "CSV_Extract_Database_Name" : "MRI",
+    "CSV_Extract_Database_Type" : "Aurora",
+    "CSV_SQL_Path_Bucket" : "s3bucket03",
+    "CSV_SQL_Path_Key"    : "QueryData/aurora_query.txt",
+    "CSV_Load_Path" : "s3://s3bucket03/Output/Redshift/",
+    "CSV_Connection_String" : "AuroraConnect1"
+    }
+    {
+    "Parameter_Name" : "Table_B",
+    "Parameter_Type" : "DML",
+    "DML_Extract_S3_path" : "s3://bucketstuti1/input_folder/data.csv",
+    "DML_Target_Database_name" : "dev",
+    "DML_Target_Database_Type" : "Redshift",
+    "DML_SQL_File_Bucket" : "bucketstuti1",
+    "DML_SQL_File_Path" : "SQL_scripts/sql1.txt",
+    "DML_Connection_String" : "NewConnection",
+    "CSV_Extract_Database_Name" : "NA",
+    "CSV_Extract_Database_Type" : "NA",
+    "CSV_SQL_Path_Bucket" : "NA",
+    "CSV_SQL_Path_Key" : "NA",
+    "CSV_Load_Path" : "NA",
+    "CSV_Connection_String" : "NA"
+    }
+    {
+    "Parameter_Name" : "Table_C",
+    "Parameter_Type" : "Both",
+    "DML_Extract_S3_path" : "s3://bucketstuti1/input_folder/data.csv",
+    "DML_Target_Database_name" : "dev",
+    "DML_Target_Database_Type" : "Redshift",
+    "DML_SQL_File_Bucket" : "bucketstuti1",
+    "DML_SQL_File_Path" : "SQL_scripts/sql1.txt",
+    "DML_Connection_String" : "NewConnection",
+    "CSV_Extract_Database_Name" : "dev",
+    "CSV_Extract_Database_Type" : "Redshift",
+    "CSV_SQL_Path_Bucket" : "s3bucket03",
+    "CSV_SQL_Path_Key"    : "QueryData/aurora_query.txt",
+    "CSV_Load_Path" : "s3://s3bucket03/Output/Redshift/",
+    "CSV_Connection_String" : "NewConnection"
+    }
+
+
+
