@@ -1,0 +1,78 @@
+from redshift_module import pygresql_redshift_common as rs_common
+#import psycopg2
+# from awsglue.job import Job
+import os
+import boto3
+import json
+import sys
+from awsglue.utils import getResolvedOptions
+import pandas as pd
+
+s3 = boto3.client('s3')
+glue = boto3.client('glue')
+
+#Receives the Parameter (CSV File name) from Job Parameter
+args = getResolvedOptions(sys.argv, ['Parameter_Name'])
+DMLParameterName = args['Parameter_Name']
+print("S3 File Name:-",DMLParameterName)
+print("                                                       ")
+print("                                                       ")
+
+#Reads the Setting file
+setting_file= s3.get_object(Bucket='s3bucket03', Key='SettingData/Controller_Setting_Data.json')
+SettingData=setting_file['Body'].read().decode('utf-8')
+
+SettingJson= json.loads(SettingData)
+print("Setting Data:-")
+print(SettingJson)
+print("                                                       ")
+print("                                                       ")
+
+#Displays the SQL Details, Loading database details and Database Connection Parameter
+objDtl=list(filter(lambda x:x["Extract_CSV_Name"]==DMLParameterName,SettingJson))
+for i in objDtl:
+    DMLExtractS3path      =i['DML_Extract_S3_path']
+    DMLTargetDatabasename =i['DML_Target_Database_name']
+    DMLTargetDatabaseType =i['DML_Target_Database_Type']
+    DMLSQLFileBucket      =i['DML_SQL_File_Bucket']
+    DMLSQLFilePath        =i['DML_SQL_File_Path']
+    DMLConnectionString   =i['DML_Connection_String']
+print("------ SQL Details, Database details and Connection Parameter ------- ")
+print("Extract S3 path:-",DMLExtractS3path)
+print("Target Database Name:-",DMLTargetDatabasename)
+print("Target Database Type:-",DMLTargetDatabaseType)
+print("SQL File Bucket:-",DMLSQLFileBucket)
+print("SQL File Path:-",SQLFilePath)
+print("Connection String:-",DMLConnectionString)
+print("                                                       ")
+print("                                                       ")
+
+#Reads the DML SQL file
+DML_SQL_Object = s3.get_object(Bucket=DMLSQLFileBucket,Key=DMLSQLFilePath)
+DML_SQL_File = DML_SQL_Object['Body'].read().decode('utf-8')
+print("----------------------- SQl Query ---------------------------------- ")
+print(DML_SQL_File)
+print("                                                       ")
+print("                                                       ")
+
+#Get Glue Connection information from connection with Glue API
+glue_con_inf = glue.get_connection(Name='NewConnection',HidePassword=False)
+
+#Extract various parameters from Connection Info
+USERNAME = glue_con_inf['Connection']['ConnectionProperties']['USERNAME']
+PASSWORD = glue_con_inf['Connection']['ConnectionProperties']['PASSWORD']
+JDBC_URL = glue_con_inf['Connection']['ConnectionProperties']['JDBC_CONNECTION_URL']
+HOST_URL = JDBC_URL.split('/')
+HOST = HOST_URL[2].split(':')[0]
+PORT = int(HOST_URL[2].split(':')[1])
+DB_NAME = HOST_URL[3]
+
+
+#Connect to Required Database
+Database_Connection = rs_common.get_connection(USERNAME, PASSWORD, HOST, PORT, DB_NAME)
+
+#Execute the DML SQL Query on the Database
+SQL_Result = rs_common.query(Database_Connection,DML_SQL_File)
+
+
+#job.commit()

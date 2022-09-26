@@ -1,0 +1,105 @@
+import sys
+from awsglue.transforms import *
+from awsglue.utils import getResolvedOptions
+from pyspark.context import SparkContext
+from awsglue.context import GlueContext
+from awsglue.job import Job
+import boto3 
+import json 
+from awsglue.dynamicframe import DynamicFrame
+from pyspark.sql import SparkSession
+s3 = boto3.client('s3')
+glue = boto3.client('glue')
+import pandas as pd
+
+args = getResolvedOptions(sys.argv, ["JOB_NAME"])
+sc = SparkContext()
+glueContext = GlueContext(sc)
+spark = glueContext.spark_session
+job = Job(glueContext)
+job.init(args["JOB_NAME"], args)
+glue = boto3.client('glue')
+job_return_dic={}
+
+args = getResolvedOptions(sys.argv, ['Parameter_Name'])
+TableName = args['Parameter_Name']
+print("The Table to be Extracted:-", TableName)
+
+#Read "Setting Data" S3 file in Glue Dynamic Frame  #Parameters of Aurora and Redshift in Setting file
+Setting_Data_Dynamic_Frame = glueContext.create_dynamic_frame.from_options(
+    format_options={"multiline": False},
+    connection_type="s3",
+    format="json",
+    connection_options={"paths": ["s3://s3bucket03/SettingData/Controller_Setting_Data.json"]},
+    transformation_ctx="Setting_Data_Dynamic_Frame"
+)
+Setting_Data_Dynamic_Frame.show()
+
+#Convert Glue Dynamic Frame to Spark Dataframe
+Setting_Data_SDF = Setting_Data_Dynamic_Frame.toDF()
+Setting_Data_SDF.show()
+
+#Extracting table while is in Glue Parameter #Switch DB
+Table_details_DF = Setting_Data_SDF.filter(Setting_Data_SDF.Extract_Table == TableName)
+Table_details_DF.show()
+
+
+CSVExtractDatabaseName = Table_details_DF.first()['CSV_Extract_Database_Name']
+CSVExtractDatabaseType = Table_details_DF.first()['CSV_Extract_Database_Type']
+CSVSQLPathBucket       = Table_details_DF.first()['CSV_SQL_Path_Bucket']
+CSVSQLPathKey          = Table_details_DF.first()['CSV_SQL_Path_Key']
+CSVLoadPath            = Table_details_DF.first()['CSV_Load_Path']
+CSVConnectionString    = Table_details_DF.first()['CSV_Connection_String']
+
+#Display the Table Details extracted from Setting Data
+print("SQL Path Bucket:-", CSVSQLPathBucket)
+print("SQL Path Key:-", CSVSQLPathKey)
+print("Connection String:-", CSVConnectionString)
+print("Target Location:-", CSVLoadPath)
+
+# Read the external SQL file to fetch the extraction SQL code
+ReadSqlFile =s3.get_object(Bucket=CSVSQLPathBucket, Key=CSVSQLPathKey)
+SQL_QUERY = ReadSqlFile['Body'].read().decode('utf-8')
+print("Extraction SQL Query:-", SQL_QUERY)
+
+#Get Database Credentials from connection with Glue API
+glue_con_inf = glue.get_connection(Name=CSVConnectionString,HidePassword=False)
+
+USERNAME = glue_con_inf['Connection']['ConnectionProperties']['USERNAME']
+PASSWORD = glue_con_inf['Connection']['ConnectionProperties']['PASSWORD']
+JDBC_URL =  glue_con_inf['Connection']['ConnectionProperties']['JDBC_CONNECTION_URL']
+HOST_URL = JDBC_URL.split('/')
+HOST = HOST_URL[2].split(':')[0]
+PORT = int(HOST_URL[2].split(':')[1])
+DB_NAME = HOST_URL[3]
+
+#Spark read of the Extract Table Data
+TableDF = spark.read.format("jdbc") \
+  .option("url",JDBC_URL) \
+  .option("user",USERNAME) \
+  .option("password",PASSWORD) \
+  .option("query",SQL_QUERY) \
+  .option("tempdir", "s3://s3bucket03/Output/Redshift/") \
+  .option("aws_iam_role", "arn:aws:iam::534722855000:role/Extract_Policy") \
+  .load()
+
+print("Extracted Details")
+TableDF.show()
+
+
+#Convert the extracted Dataframe (TableDF back) to dynamic frame for writing the data into S3
+S3_dynamic_frame_write = DynamicFrame.fromDF(TableDF, glueContext, "S3_dynamic_frame_write")
+
+#Write data to S3 Extract Path
+glueContext.write_dynamic_frame.from_options(
+frame = S3_dynamic_frame_write,
+connection_type = "s3",
+connection_options = {
+"path": CSVLoadPath
+},
+format = "csv"
+)
+
+print("Extracted Details Loaded into:-", CSVLoadPath)
+
+job.commit()
