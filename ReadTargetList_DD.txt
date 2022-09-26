@@ -1,0 +1,30 @@
+import json
+import csv
+import urllib.parse
+import boto3
+dynamo_client = boto3.resource("dynamodb")
+s3 = boto3.client('s3')
+from boto3.dynamodb.conditions import Key
+
+def lambda_handler(event, context):
+    ListType=event['TargetList']
+    TargetListTable=dynamo_client.Table('TargetListTable')
+    TargetListTempTable=dynamo_client.Table('TargetListTemp')
+    
+    TargetListResponse=TargetListTable.query(
+                   KeyConditionExpression=Key('List_Type').eq('MRI')
+            )
+    TargetListJson=TargetListResponse['Items']
+    print(TargetListJson)
+    for i in TargetListJson:
+        #Here we will put all the target list in a temp table (Aurora).
+        TableName    = i['Table_Name'] 
+        KeyName      = i['Key_Name']
+        TargetListTempTable.put_item(
+        Item={
+            'Key_Name':KeyName,
+            'Table_Name':TableName
+             }
+        )
+    #End of For loop
+    return event

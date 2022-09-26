@@ -1,0 +1,35 @@
+import json
+import boto3
+import csv
+import urllib.parse
+from boto3.dynamodb.conditions import Key, Attr
+
+dynamo_client=boto3.resource("dynamodb")
+TargetTable=dynamo_client.Table("TargetListTable")
+
+def lambda_handler(event, context):
+    print("Start")
+    TargetListResponse = TargetTable.scan(FilterExpression=Attr('TT_Status').eq('Y'))
+    TargetListJson = TargetListResponse['Items']
+    print(TargetListJson)
+    for i in TargetListJson:
+      ListType     = i['List_Type']
+      TableName    = i['Table_Name'] 
+      KeyName      = i['Key_Name']
+      TTStatus     = i['TT_Status']
+      if TTStatus == 'Y':
+           #Update the Attribute "Processed" to N for all Item.
+            TargrtUpdateResponse = TargetTable.update_item(
+            Key={'List_Type':ListType, 'Key_Name':KeyName},
+            UpdateExpression="SET TT_Status= :P",
+            ExpressionAttributeValues={':P': 'N'}
+            )
+            return TargetListJson
+------------------------------------------------
+{
+  "List_Type": "MRI",
+  "Table_Name": "Table_A",
+  "Key_Name": "Key_A",
+  "TT_Status": "N"
+}
+  

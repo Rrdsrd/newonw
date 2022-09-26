@@ -1,0 +1,20 @@
+import json
+import boto3
+dynamodb = boto3.resource('dynamodb') 
+table = dynamodb.Table('SettingFileSC')
+
+def lambda_handler(event, context):
+    # TODO implement
+    print(event)
+    inputParm=event["Table_Name"]
+    response=table.get_item(
+        Key={
+            
+            "Parameter_Name":inputParm
+            
+        }
+        
+        )
+        
+    StatusSettingJson=response['Item']
+    return  StatusSettingJson

@@ -1,0 +1,73 @@
+import json
+import boto3
+import csv
+import urllib.parse
+from boto3.dynamodb.conditions import Key, Attr
+
+step_client=boto3.client('stepfunctions')
+rds_client = boto3.client('rds-data')
+s3 = boto3.client('s3')
+
+dynamo_client=boto3.resource("dynamodb")
+TargetTable=dynamo_client.Table("TargetListTable")
+
+DATABASE_NAME = "MRI"
+DB_CLUSTER_ARN ="arn:aws:rds:ap-northeast-1:534722855000:cluster:statuscheck"
+DB_CREDENTIAL_SECRET_ARN ="arn:aws:secretsmanager:ap-northeast-1:534722855000:secret:rds-db-credentials/cluster-26Z6QLKQ7ORWYIQPKP7VK46UVI/admin/1663130327745-3eVjQs"
+
+def lambda_handler(event, context):
+    print("Start")
+    TargetListResponse = TargetTable.scan()
+    TargetListJson = TargetListResponse['Items']
+    print(TargetListJson)
+    for i in TargetListJson:
+      ListType     = i['List_Type']
+      TableName    = i['Table_Name'] 
+      KeyName      = i['Key_Name']
+      TTStatus     = i['TT_Status']
+      if TTStatus == 'N':
+         #Build SQL for T_Status table read
+         TStatusSelectSQL='select TableName, Status from T_Status where TableName = "'+TableName+'" and Status=1 and Start_Date = "2022-08-17"'
+
+         #Read Table T_Status
+         TStatusSelectResponse = rds_client.execute_statement(
+            secretArn=DB_CREDENTIAL_SECRET_ARN,
+            database=DATABASE_NAME,
+            resourceArn=DB_CLUSTER_ARN,
+            sql=TStatusSelectSQL
+           )
+         TstatusRecFound = len(TStatusSelectResponse['records'])
+         print("Table ready for processing----", TstatusRecFound)
+         if TstatusRecFound > 0:
+         #Here we will trigger the Controller Step Function for this particular table.
+           ControllerParmDict={}
+           ControllerParmDict['Table_Name'] = TableName
+           ControllerParmDict['Key_Name'] = KeyName
+           ControllerParmString=json.dumps(ControllerParmDict)
+           
+           Step_Invoke = step_client.start_execution(
+               stateMachineArn='arn:aws:states:ap-northeast-1:534722855000:stateMachine:Controller_Flow',
+               input=ControllerParmString
+               )
+           #Update the Attribute "Processed" to Y TargetListTable table for this particular Record.
+           TargrtUpdateResponse = TargetTable.update_item(
+               Key={'List_Type':ListType, 'Key_Name':KeyName},
+                   UpdateExpression="SET TT_Status= :P",
+                   ExpressionAttributeValues={':P': 'Y'}
+               )
+          ## End if
+      ##End If      
+    #End For
+    RemainingTargetResponse = TargetTable.scan(FilterExpression=Attr('TT_Status').eq('N'))
+    TargetListJson = TargetListResponse['Count']
+    RemainingRecordCnt=RemainingTargetResponse['Count']
+    print("Remaining Record Count----", RemainingRecordCnt)
+    
+    RemainingRecordDict={}
+    RemainingRecordDict["RemainingRecordCount"] = RemainingRecordCnt
+    RemainingRecordDict["SQLFile"] = event['SQLFile']
+    RemainingRecordString = json.dumps(RemainingRecordDict)
+    
+    RemainingRecordJson = json.loads(RemainingRecordString)   
+    print(RemainingRecordJson)
+    return RemainingRecordJson
